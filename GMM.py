@@ -189,3 +189,41 @@ class TF_GMM:
             print(f"AIC          : {aic.numpy():.4f}")
             print(f"BIC          : {bic.numpy():.4f}")
         return final_gamma, prev_log_likelihood.numpy(), aic.numpy(), bic.numpy()
+
+# Validation GMM function
+
+@tf.function(reduce_retracing=True)
+def log_gaussian_pdf(X, Mu, Sigma):
+    D = tf.cast(X.shape[1], tf.float32)
+
+    diff = X - Mu
+    L = tf.linalg.cholesky(Sigma)
+    y = tf.linalg.triangular_solve(L, tf.transpose(diff), lower = True)
+    dist_sq = tf.reduce_sum(tf.square(y), axis = 0)
+
+    log_det_sigma = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.diag_part(L)))
+        
+    log_const = D * tf.math.log(tf.constant(2.0 * np.pi, dtype=tf.float32))
+    log_prob = -0.5 * (log_const + log_det_sigma + dist_sq)
+        
+    return log_prob
+
+@tf.function(reduce_retracing=True)
+def GMM_E_Step(X, Mu, Sigma, Pi):
+    K = tf.shape(Mu)[0]
+
+    log_prob_lists = tf.TensorArray(tf.float32, size = K)
+    for k in range(K):
+        log_prob = log_gaussian_pdf(X, Mu[k], Sigma[k])
+        log_prob_lists = log_prob_lists.write(k, log_prob)
+
+    log_pdfs = tf.transpose(log_prob_lists.stack())# list with k (N,) -> array (N,k)
+
+    log_weighted_probs = log_pdfs + tf.math.log(Pi + 1e-10)
+
+    log_evidence = tf.math.reduce_logsumexp(log_weighted_probs, axis = 1, keepdims = True) # -> (N,1)
+
+    log_gamma = log_weighted_probs - log_evidence
+    gamma = tf.exp(log_gamma)
+
+    return gamma, tf.reduce_sum(log_evidence)
