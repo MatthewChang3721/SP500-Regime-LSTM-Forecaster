@@ -209,7 +209,7 @@ def log_gaussian_pdf(X, Mu, Sigma):
     return log_prob
 
 @tf.function(reduce_retracing=True)
-def GMM_E_Step(X, Mu, Sigma, Pi):
+def GMM_predict(X, Mu, Sigma, Pi):
     K = tf.shape(Mu)[0]
 
     log_prob_lists = tf.TensorArray(tf.float32, size = K)
